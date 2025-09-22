@@ -43,17 +43,25 @@ jobs:
           REPO_NAME=$(echo $GITHUB_REPOSITORY | cut -d'/' -f2)
 
           # Create the dynamic GitHub Pages URL
-          GITHUB_PAGES_URL="https://${REPO_OWNER}.github.io/${REPO_NAME}/"
-          echo "Setting baseUrl to: $GITHUB_PAGES_URL"
+          GITHUB_PAGES_URL="https://${REPO_OWNER}.github.io/${REPO_NAME}"
+          echo "Setting GitHub Pages URL to: $GITHUB_PAGES_URL"
 
           # Use sed to replace the baseUrl in loader.js
           # Note: The -i.bak creates a backup file that we'll remove afterward
-          sed -i.bak "s|baseUrl: '.*'|baseUrl: '$GITHUB_PAGES_URL'|" public/loader.js
+          sed -i.bak "s|baseUrl: '.*'|baseUrl: '$GITHUB_PAGES_URL/'|" public/loader.js
           rm public/loader.js.bak
 
           # Show the result (for debugging)
           echo "Updated loader.js baseUrl:"
           grep -A 1 "baseUrl:" public/loader.js
+
+          # Replace the placeholder in index.html
+          sed -i.bak "s|GITHUB_PAGES_URL_PLACEHOLDER|$GITHUB_PAGES_URL|g" public/index.html
+          rm public/index.html.bak
+
+          # Show the result (for debugging)
+          echo "Updated index.html script src:"
+          grep -A 1 "script src=" public/index.html
 
       - name: Build project
         run: npm run build
