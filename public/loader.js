@@ -17,7 +17,8 @@
     // Configuration (can be modified for different environments)
     const config = {
         // Base URL where the built assets are hosted (GitHub Pages URL for this repo)
-        baseUrl: 'https://example.github.io/your-repo',
+        // This will be automatically updated by the GitHub Actions workflow
+        baseUrl: 'https://johnkraczek.github.io/spa-template/',
 
         // The div ID where the React app will mount
         rootElementId: 'root',

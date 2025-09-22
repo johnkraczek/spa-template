@@ -36,6 +36,25 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Update loader.js baseUrl
+        run: |
+          # Get the repository owner and name
+          REPO_OWNER="${GITHUB_REPOSITORY_OWNER}"
+          REPO_NAME=$(echo $GITHUB_REPOSITORY | cut -d'/' -f2)
+
+          # Create the dynamic GitHub Pages URL
+          GITHUB_PAGES_URL="https://${REPO_OWNER}.github.io/${REPO_NAME}/"
+          echo "Setting baseUrl to: $GITHUB_PAGES_URL"
+
+          # Use sed to replace the baseUrl in loader.js
+          # Note: The -i.bak creates a backup file that we'll remove afterward
+          sed -i.bak "s|baseUrl: '.*'|baseUrl: '$GITHUB_PAGES_URL'|" public/loader.js
+          rm public/loader.js.bak
+
+          # Show the result (for debugging)
+          echo "Updated loader.js baseUrl:"
+          grep -A 1 "baseUrl:" public/loader.js
+
       - name: Build project
         run: npm run build
 
