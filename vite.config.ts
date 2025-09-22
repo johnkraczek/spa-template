@@ -11,4 +11,12 @@ export default defineConfig({
       "~": path.resolve(__dirname, "./src"),
     },
   },
+  build: {
+    manifest: true, // This enables the manifest.json generation
+    rollupOptions: {
+      input: {
+        main: path.resolve(__dirname, 'index.html'),
+      },
+    },
+  },
 })
