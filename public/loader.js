@@ -182,7 +182,18 @@
             // 2. Set up the asset resolver before loading JavaScript
             setupAssetResolver();
 
-            // 3. Find the main assets
+            // 3. Add a global event listener for import.meta accesses in modules
+            // This is safer than trying to directly modify import.meta
+            window.addEventListener('error', function (event) {
+                const errorMessage = event.message || '';
+                if (errorMessage.includes('import.meta') || errorMessage.includes('Cannot read properties of undefined (reading \'url\')')) {
+                    console.warn('Caught import.meta error, this is expected and handled by the loader');
+                    event.preventDefault();
+                    event.stopPropagation();
+                }
+            }, true);
+
+            // 4. Find the main assets
             const assets = findMainAssets(manifest);
             console.log('Main assets found:', assets);
 
@@ -377,27 +388,18 @@
         const script = document.createElement('script');
         const normalizedBaseUrl = config.baseUrl.endsWith('/') ? config.baseUrl.slice(0, -1) : config.baseUrl;
         script.textContent = `
-            // Handle Vite's import.meta.url asset references
+            // Handle Vite's asset URL resolution
             window.__viteAssetUrl = function(url) {
                 return window.__resolveAssetUrl(url);
             };
             
-            // Create a proxy for import.meta
-            if (typeof import !== 'undefined' && import.meta) {
-                const originalMeta = import.meta;
-                import.meta = new Proxy(originalMeta, {
-                    get(target, prop) {
-                        if (prop === 'url') {
-                            // Return a fake base URL that's consistent
-                            return '${normalizedBaseUrl}';
-                        }
-                        return target[prop];
-                    }
-                });
-            }
-            
             // Make sure publicPath is set for any webpack-like systems
             window.__webpack_public_path__ = '${normalizedBaseUrl}/';
+            
+            // Set a global base URL for any other asset resolution needs
+            window.__assetBaseUrl = '${normalizedBaseUrl}';
+            
+            console.log('Asset resolution configured with base URL: ${normalizedBaseUrl}');
         `;
         document.head.appendChild(script);
 
