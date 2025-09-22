@@ -350,10 +350,10 @@
 
                         if (normalizedPath in assetMap) {
                             // Use the hashed filename from the asset map
-                            resolvedUrl = `${config.baseUrl}${assetMap[normalizedPath]}`;
+                            resolvedUrl = joinUrl(config.baseUrl, assetMap[normalizedPath]);
                         } else {
                             // Fallback to direct path resolution
-                            resolvedUrl = `${config.baseUrl}${normalizedPath}`;
+                            resolvedUrl = joinUrl(config.baseUrl, normalizedPath);
                         }
 
                         console.log(`Resolved image URL: ${url} → ${resolvedUrl}`);
@@ -365,6 +365,13 @@
                 configurable: true
             });
         }
+
+        // Add debug logging for all assets
+        window.addEventListener('error', function (event) {
+            if (event.target && (event.target.tagName === 'IMG' || event.target.tagName === 'SCRIPT' || event.target.tagName === 'LINK')) {
+                console.error(`Failed to load resource: ${event.target.src || event.target.href}`, event);
+            }
+        }, true);
 
         // Add a script to handle dynamic asset loading in JS modules
         const script = document.createElement('script');
