@@ -192,10 +192,63 @@
             await loadJavaScript(assets.js);
             console.log('JavaScript loaded successfully');
 
+            // 6. Patch any existing images that might have been added by the app
+            patchExistingImages();
+
         } catch (error) {
             console.error('Failed to initialize YDTB app:', error);
             showErrorMessage(`Failed to load application resources: ${error.message}`);
         }
+    }
+
+    /**
+     * Patch all existing images on the page to use the correct base URL
+     */
+    function patchExistingImages() {
+        // Fix all image elements
+        document.querySelectorAll('img').forEach(img => {
+            const originalSrc = img.getAttribute('src');
+            if (originalSrc &&
+                !originalSrc.startsWith('http://') &&
+                !originalSrc.startsWith('https://') &&
+                !originalSrc.startsWith('data:') &&
+                !originalSrc.startsWith('blob:')) {
+                // Temporarily remove to trigger the patched setter
+                img.removeAttribute('src');
+                img.setAttribute('src', originalSrc);
+            }
+        });
+
+        // Fix all background images in inline styles
+        document.querySelectorAll('[style*="background"]').forEach(el => {
+            const style = el.getAttribute('style');
+            if (style && style.includes('url(')) {
+                // Find all URL patterns in the style
+                const urlPattern = /url\(['"]?([^'")]+)['"]?\)/g;
+                let newStyle = style;
+                let match;
+
+                while ((match = urlPattern.exec(style)) !== null) {
+                    const url = match[1];
+                    // Only replace relative URLs
+                    if (url &&
+                        !url.startsWith('http://') &&
+                        !url.startsWith('https://') &&
+                        !url.startsWith('data:') &&
+                        !url.startsWith('blob:')) {
+
+                        const resolvedUrl = window.__resolveAssetUrl(url);
+                        newStyle = newStyle.replace(url, resolvedUrl);
+                    }
+                }
+
+                if (newStyle !== style) {
+                    el.setAttribute('style', newStyle);
+                }
+            }
+        });
+
+        console.log('Patched existing images on the page');
     }
 
     /**
@@ -211,26 +264,51 @@
                 return assetPath;
             }
 
-            // Check if this asset is in the manifest
-            if (globalManifest) {
-                // Remove leading slash if present
-                const normalizedPath = assetPath.startsWith('/') ? assetPath.substring(1) : assetPath;
+            // If asset not found in manifest, still try to resolve it with the base URL
+            return `${config.baseUrl}${assetPath.startsWith('/') ? assetPath.substring(1) : assetPath}`;
+        };
 
-                // Look for the asset in the manifest
-                for (const entry of Object.values(globalManifest)) {
-                    // Check if this entry has the asset we're looking for
-                    if (entry.file === normalizedPath ||
-                        (entry.assets && entry.assets.includes(normalizedPath))) {
-                        return `${config.baseUrl}/${normalizedPath}`;
+        // Create a map of original asset paths to their hashed versions from the manifest
+        const assetMap = {};
+
+        if (globalManifest) {
+            // Build a comprehensive asset map from the manifest
+            for (const [key, entry] of Object.entries(globalManifest)) {
+                // Map the main file
+                if (entry.file) {
+                    assetMap[key] = entry.file;
+                    // Also map without the src/ prefix which is common in Vite
+                    if (key.startsWith('src/')) {
+                        assetMap[key.substring(4)] = entry.file;
                     }
+                }
+
+                // Map assets array
+                if (entry.assets && Array.isArray(entry.assets)) {
+                    entry.assets.forEach(asset => {
+                        // Try to find the original path from the manifest keys
+                        const originalAssetKey = Object.keys(globalManifest).find(k =>
+                            globalManifest[k].file === asset
+                        );
+
+                        if (originalAssetKey) {
+                            assetMap[originalAssetKey] = asset;
+                            // Also map without the src/ prefix
+                            if (originalAssetKey.startsWith('src/')) {
+                                assetMap[originalAssetKey.substring(4)] = asset;
+                            }
+                        }
+
+                        // Always map the hashed name to itself for direct references
+                        assetMap[asset] = asset;
+                    });
                 }
             }
 
-            // If asset not found in manifest, still try to resolve it with the base URL
-            return `${config.baseUrl}/${assetPath.startsWith('/') ? assetPath.substring(1) : assetPath}`;
-        };
+            console.log('Asset map created:', assetMap);
+        }
 
-        // Patch Image.prototype.src to intercept and resolve image paths
+        // Intercept all image loading
         const originalImageSrcDescriptor = Object.getOwnPropertyDescriptor(Image.prototype, 'src');
         if (originalImageSrcDescriptor && originalImageSrcDescriptor.configurable) {
             Object.defineProperty(Image.prototype, 'src', {
@@ -238,13 +316,32 @@
                     return originalImageSrcDescriptor.get.call(this);
                 },
                 set: function (url) {
+                    if (!url) {
+                        originalImageSrcDescriptor.set.call(this, url);
+                        return;
+                    }
+
                     // Only transform relative URLs
-                    if (url && typeof url === 'string' &&
+                    if (typeof url === 'string' &&
                         !url.startsWith('http://') &&
                         !url.startsWith('https://') &&
                         !url.startsWith('data:') &&
                         !url.startsWith('blob:')) {
-                        const resolvedUrl = window.__resolveAssetUrl(url);
+
+                        // First check if this path is in our asset map
+                        let resolvedUrl;
+
+                        // Normalize the path (remove leading slash)
+                        const normalizedPath = url.startsWith('/') ? url.substring(1) : url;
+
+                        if (normalizedPath in assetMap) {
+                            // Use the hashed filename from the asset map
+                            resolvedUrl = `${config.baseUrl}${assetMap[normalizedPath]}`;
+                        } else {
+                            // Fallback to direct path resolution
+                            resolvedUrl = `${config.baseUrl}${normalizedPath}`;
+                        }
+
                         console.log(`Resolved image URL: ${url} → ${resolvedUrl}`);
                         originalImageSrcDescriptor.set.call(this, resolvedUrl);
                     } else {
@@ -255,13 +352,40 @@
             });
         }
 
+        // Add a script to handle dynamic asset loading in JS modules
+        const script = document.createElement('script');
+        script.textContent = `
+            // Handle Vite's import.meta.url asset references
+            window.__viteAssetUrl = function(url) {
+                return window.__resolveAssetUrl(url);
+            };
+            
+            // Create a proxy for import.meta
+            if (typeof import !== 'undefined' && import.meta) {
+                const originalMeta = import.meta;
+                import.meta = new Proxy(originalMeta, {
+                    get(target, prop) {
+                        if (prop === 'url') {
+                            // Return a fake base URL that's consistent
+                            return '${config.baseUrl}';
+                        }
+                        return target[prop];
+                    }
+                });
+            }
+            
+            // Make sure publicPath is set for any webpack-like systems
+            window.__webpack_public_path__ = '${config.baseUrl}';
+        `;
+        document.head.appendChild(script);
+
         // Add a meta tag to indicate that the asset resolver is set up
         const meta = document.createElement('meta');
         meta.name = 'asset-resolver-version';
-        meta.content = '1.0';
+        meta.content = '1.1';
         document.head.appendChild(meta);
 
-        console.log('Asset resolver has been set up');
+        console.log('Enhanced asset resolver has been set up');
     }
 
     // Start loading the app when the DOM is ready
