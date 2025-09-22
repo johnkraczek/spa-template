@@ -19,7 +19,7 @@
     const config = {
         // Base URL where the built assets are hosted (GitHub Pages URL for this repo)
         // This will be automatically updated by the GitHub Actions workflow
-        baseUrl: 'https://your-org.github.io/your-repo/',
+        baseUrl: 'https://your-org.github.io/your-repo',
 
         // The div ID where the React app will mount
         rootElementId: 'root',
@@ -36,7 +36,9 @@
      */
     async function fetchManifest() {
         try {
-            const manifestUrl = `${config.baseUrl}${config.manifestPath}`;
+            // Ensure the baseUrl doesn't have a trailing slash before adding the manifestPath
+            const baseUrl = config.baseUrl.endsWith('/') ? config.baseUrl.slice(0, -1) : config.baseUrl;
+            const manifestUrl = `${baseUrl}${config.manifestPath}`;
             console.log('Fetching manifest from:', manifestUrl);
 
             const response = await fetch(manifestUrl);
@@ -112,7 +114,9 @@
     function loadJavaScript(url) {
         return new Promise((resolve, reject) => {
             const script = document.createElement('script');
-            const fullUrl = `${config.baseUrl}/${url}`;
+            // Ensure proper URL joining
+            const baseUrl = config.baseUrl.endsWith('/') ? config.baseUrl : `${config.baseUrl}/`;
+            const fullUrl = `${baseUrl}${url}`;
             console.log('Loading JavaScript from:', fullUrl);
 
             script.src = fullUrl;
@@ -129,7 +133,9 @@
     function loadStylesheet(url) {
         return new Promise((resolve, reject) => {
             const link = document.createElement('link');
-            const fullUrl = `${config.baseUrl}/${url}`;
+            // Ensure proper URL joining
+            const baseUrl = config.baseUrl.endsWith('/') ? config.baseUrl : `${config.baseUrl}/`;
+            const fullUrl = `${baseUrl}${url}`;
             console.log('Loading CSS from:', fullUrl);
 
             link.rel = 'stylesheet';
@@ -255,6 +261,14 @@
      * Set up asset URL resolution for images and other static assets
      */
     function setupAssetResolver() {
+        // Helper function to ensure proper URL joining
+        const joinUrl = (base, path) => {
+            if (!path) return base;
+            const baseWithoutSlash = base.endsWith('/') ? base.slice(0, -1) : base;
+            const pathWithoutSlash = path.startsWith('/') ? path.substring(1) : path;
+            return `${baseWithoutSlash}/${pathWithoutSlash}`;
+        };
+
         // Create a global __resolveAssetUrl function to be used by the app
         window.__resolveAssetUrl = function (assetPath) {
             if (!assetPath) return '';
@@ -264,8 +278,8 @@
                 return assetPath;
             }
 
-            // If asset not found in manifest, still try to resolve it with the base URL
-            return `${config.baseUrl}${assetPath.startsWith('/') ? assetPath.substring(1) : assetPath}`;
+            // Properly join the base URL and asset path
+            return joinUrl(config.baseUrl, assetPath);
         };
 
         // Create a map of original asset paths to their hashed versions from the manifest
@@ -354,6 +368,7 @@
 
         // Add a script to handle dynamic asset loading in JS modules
         const script = document.createElement('script');
+        const normalizedBaseUrl = config.baseUrl.endsWith('/') ? config.baseUrl.slice(0, -1) : config.baseUrl;
         script.textContent = `
             // Handle Vite's import.meta.url asset references
             window.__viteAssetUrl = function(url) {
@@ -367,7 +382,7 @@
                     get(target, prop) {
                         if (prop === 'url') {
                             // Return a fake base URL that's consistent
-                            return '${config.baseUrl}';
+                            return '${normalizedBaseUrl}';
                         }
                         return target[prop];
                     }
@@ -375,7 +390,7 @@
             }
             
             // Make sure publicPath is set for any webpack-like systems
-            window.__webpack_public_path__ = '${config.baseUrl}';
+            window.__webpack_public_path__ = '${normalizedBaseUrl}/';
         `;
         document.head.appendChild(script);
 

@@ -48,7 +48,7 @@ jobs:
 
           # Use sed to replace the baseUrl in loader.js
           # Note: The -i.bak creates a backup file that we'll remove afterward
-          sed -i.bak "s|baseUrl: '.*'|baseUrl: '$GITHUB_PAGES_URL/'|" public/loader.js
+          sed -i.bak "s|baseUrl: '.*'|baseUrl: '$GITHUB_PAGES_URL'|" public/loader.js
           rm public/loader.js.bak
 
           # Show the result (for debugging)
