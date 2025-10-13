@@ -14,11 +14,21 @@
     This is an example of how to embed the SPA in any web page using the loader script.
   </p>
 
+  <!-- Configure the loader (URL will be dynamically updated during deployment) -->
+  <script>
+    window.SpaLoaderConfig = {
+      baseUrl: 'GITHUB_PAGES_URL_PLACEHOLDER',
+      containerSelector: '#root',
+      mountStrategy: 'first',
+      showErrors: true
+    };
+  </script>
+
   <!-- This is where the React app will be mounted -->
   <div id="root"></div>
 
-  <!-- Load the SPA using the loader script (URL will be dynamically updated during deployment) -->
-  <script src="GITHUB_PAGES_URL_PLACEHOLDER/loader.js"></script>
+  <!-- Load the SPA using the improved configurable loader script -->
+  <script src="/loader.js"></script>
 
 </body>
 

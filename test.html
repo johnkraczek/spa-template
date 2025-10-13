@@ -1,0 +1,187 @@
+<!-- Elementor HTML Widget Code - Add this to your WordPress Elementor page -->
+<iframe id="ghl-iframe" src="https://ydtb.link/community-offer" style="width: 100%; border: none; min-height: 650px;"
+    scrolling="no" title="YDTB Standard OTO">
+</iframe>
+
+<script>
+    console.log('Iframe script loaded - Starting height detection');
+
+    // Listen for height messages from GoHighLevel
+    window.addEventListener('message', function (event) {
+        console.log('PostMessage received:', {
+            origin: event.origin,
+            data: event.data,
+            type: typeof event.data
+        });
+
+        const iframe = document.getElementById('ghl-iframe');
+
+        // Security check - only accept messages from your GHL domain
+        if (event.origin !== 'https://ydtb.link') {
+            // Only log if it's not from our own WordPress site (to reduce noise)
+            if (event.origin !== 'https://shop.ydtb.link') {
+                console.log('❌ Message rejected - unknown origin:', event.origin);
+            } else {
+                console.log('🔇 Ignoring WordPress/Elementor internal message');
+            }
+            return;
+        }
+
+        console.log('🎯 Message from GHL domain accepted!');
+
+        // Handle different message formats that GHL might send
+        if (event.data && event.data.type === 'ydtb-height-message') {
+            postMessageReceived = true; // Flag that we received a PostMessage
+            iframe.style.height = event.data.height + 'px';
+            console.log('✅ Set height from GHL (ydtb-height-message):', event.data.height + 'px');
+            console.log('   📊 Element found:', event.data.elementFound || 'unknown');
+            console.log('   🕐 Timestamp:', new Date(event.data.timestamp || Date.now()).toLocaleTimeString());
+        } else if (event.data && event.data.type === 'ydtb-redirect-signal') {
+            // Handle redirect signal from GHL thank you page
+            console.log('🔀 Redirect signal received from GHL:', event.data);
+
+            // Define the next step URL here (easy to change)
+            const nextStepUrl = 'https://shop.ydtb.link/oc/thank-you/';
+
+            console.log('🔀 Will redirect to:', nextStepUrl);
+            console.log('🔀 Full signal data:', event.data);
+
+            // Give a small delay to ensure everything is processed
+            setTimeout(function () {
+                console.log('🚀 Executing redirect now...');
+                window.location.href = nextStepUrl;
+            }, 100);
+        } else if (event.data && event.data.type === 'ydtb-redirect-message') {
+            // Handle redirect requests from GHL (legacy support)
+            const redirectUrl = event.data.url;
+            if (redirectUrl) {
+                console.log('🔀 Legacy redirect request from GHL to:', redirectUrl);
+                console.log('🔀 Full redirect data:', event.data);
+                // Give a small delay to ensure any form submissions complete
+                setTimeout(function () {
+                    console.log('🚀 Executing legacy redirect now...');
+                    window.location.href = redirectUrl;
+                }, 100);
+            } else {
+                console.log('❌ Legacy redirect message missing URL:', event.data);
+            }
+        } else if (event.data && event.data.type === 'setHeight') {
+            iframe.style.height = event.data.value + 'px';
+            console.log('✅ Set height from GHL (setHeight):', event.data.value + 'px');
+        } else if (event.data && typeof event.data.height === 'number') {
+            iframe.style.height = event.data.height + 'px';
+            console.log('✅ Set height from GHL (height property):', event.data.height + 'px');
+        } else if (typeof event.data === 'number') {
+            iframe.style.height = event.data + 'px';
+            console.log('✅ Set height from GHL (number):', event.data + 'px');
+        } else {
+            console.log('❌ Unrecognized message format from GHL:', event.data);
+        }
+    });
+
+    // Fallback: Periodically check and adjust height if possible
+    let resizeAttempts = 0;
+    let resizeInterval;
+    const maxResizeAttempts = 30; // Try for 30 seconds
+    let postMessageReceived = false;
+
+    // console.log('Starting fallback height detection (will try for 30 seconds or until PostMessage is received)');
+
+    resizeInterval = setInterval(function () {
+        // Stop if we've already received a PostMessage
+        if (postMessageReceived) {
+            clearInterval(resizeInterval);
+            // console.log('✅ PostMessage received - stopping fallback detection');
+            return;
+        }
+
+        const iframe = document.getElementById('ghl-iframe');
+        resizeAttempts++;
+        // console.log(`Fallback attempt ${resizeAttempts}/${maxResizeAttempts}`);
+
+        try {
+            // This will only work if same-origin or CORS allows it
+            if (iframe.contentDocument && iframe.contentDocument.body) {
+                // console.log('✅ Can access iframe content - same origin or CORS allowed');
+                let height = 0;
+
+                // Try to find specific elements to measure
+                const targetSelectors = [
+                    '#two-setp-order-xAw9N0fMQP',    // Your specific form ID (highest priority)
+                    '.checkout-container',
+                    '.funnel-container',
+                    '.page-container',
+                    '.main-content',
+                    '[data-page-content]',
+                    '.content-wrapper'
+                ];
+
+                // console.log('Searching for target elements:', targetSelectors);
+
+                // Try each selector to find the main content element
+                for (const selector of targetSelectors) {
+                    const element = iframe.contentDocument.querySelector(selector);
+                    if (element) {
+                        height = element.offsetHeight + 50; // Add some padding
+                        // console.log('✅ Found element with selector:', selector, 'Height:', height, 'Element:', element);
+                        break;
+                    } else {
+                        // console.log('❌ Element not found:', selector);
+                    }
+                }
+
+                // Fallback to body if no specific element found
+                if (height === 0) {
+                    const bodyHeight = iframe.contentDocument.body.scrollHeight;
+                    height = Math.min(bodyHeight, 3000); // Cap at 3000px
+                    // console.log('⚠️ Using body height (capped):', height, 'Original body height:', bodyHeight);
+                }
+
+                if (height > 0) {
+                    iframe.style.height = height + 'px';
+                    // console.log('✅ Set iframe height to:', height + 'px');
+                    clearInterval(resizeInterval);
+                    // console.log('✅ Height detection complete - stopping fallback attempts');
+                }
+            } else {
+                // console.log('❌ Cannot access iframe content - cross-origin restriction or content not loaded yet');
+            }
+        } catch (e) {
+            // console.log('❌ Cross-origin error (expected):', e.message);
+        }
+
+        // Stop trying after max attempts
+        if (resizeAttempts >= maxResizeAttempts) {
+            clearInterval(resizeInterval);
+            // console.log('⏰ Height auto-detection stopped after 30 seconds. Using fallback height.');
+        }
+    }, 1000);
+
+    // Additional responsive adjustments for mobile
+    function adjustForMobile() {
+        // console.log('Adjusting for mobile/responsive');
+        const iframe = document.getElementById('ghl-iframe');
+        const windowWidth = window.innerWidth;
+
+        if (windowWidth <= 768) {
+            iframe.style.minHeight = '700px';
+            // console.log('📱 Mobile detected - set min-height to 700px, window width:', windowWidth);
+        } else {
+            iframe.style.minHeight = '650px';
+            // console.log('💻 Desktop detected - set min-height to 650px, window width:', windowWidth);
+        }
+    }
+
+    // Adjust on load and resize
+    window.addEventListener('load', function () {
+        // console.log('Window loaded - adjusting for mobile');
+        adjustForMobile();
+    });
+
+    window.addEventListener('resize', function () {
+        // console.log('Window resized - adjusting for mobile');
+        adjustForMobile();
+    });
+
+    // console.log('All event listeners attached - iframe script ready');
+</script>
